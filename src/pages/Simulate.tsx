@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react"
-import { s, API_URL, toB64Img, UploadBox, Btn } from "../lib/ui"
+import { API_URL, toB64Img, PageHeader, Card, SectionTitle, UploadBox, Btn, SliderField, CheckField, ErrorMsg, TwoCol, ResultImage } from "../lib/ui"
 
 export default function Simulate() {
   const [image, setImage] = useState<File | null>(null)
@@ -16,7 +16,7 @@ export default function Simulate() {
   const [burn, setBurn] = useState(true)
   const [debris, setDebris] = useState(true)
   const [smoke, setSmoke] = useState(true)
-  const [lens, setLens] = useState(true)
+  const [lens, setLens] = useState(false)
 
   function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]; if (!f) return
@@ -32,61 +32,64 @@ export default function Simulate() {
       form.append("file", image)
       form.append("params", JSON.stringify(params))
       const res = await fetch(`${API_URL}/simulate`, { method: "POST", body: form })
-      if (!res.ok) throw new Error(`Error ${res.status}`)
-      const data = await res.json()
-      setResult(data.result_png_base64)
+      if (!res.ok) throw new Error(`Server error ${res.status}`)
+      setResult((await res.json()).result_png_base64)
     } catch (e: any) { setError(e.message) }
     finally { setLoading(false) }
   }
 
-  const chk = (label: string, val: boolean, set: (v: boolean) => void) => (
-    <label style={{ display: "flex", alignItems: "center", gap: 8, color: "#94a3b8", fontSize: 14, marginBottom: 8, cursor: "pointer" }}>
-      <input type="checkbox" checked={val} onChange={e => set(e.target.checked)} />
-      {label}
-    </label>
-  )
-
-  const sl = (label: string, val: number, set: (v: number) => void, min: number, max: number) => (
-    <div style={{ marginBottom: 12 }}>
-      <label style={s.label}>{label}: {val}</label>
-      <input type="range" min={min} max={max} value={val} onChange={e => set(+e.target.value)} style={{ width: "100%" }} />
-    </div>
-  )
-
   return (
     <div>
-      <h1 style={s.h1}>Damage Simulator</h1>
-      <p style={s.sub}>Simulate drone strike / disaster impact effects on an aerial image.</p>
+      <PageHeader title="Damage Simulator" desc="Simulate the visual effects of a strike or disaster impact on an aerial image. For research purposes only." />
 
-      <div style={s.card}>
-        <UploadBox preview={preview} onClick={() => fileRef.current?.click()} />
-        <input ref={fileRef} type="file" accept=".png,.jpg,.jpeg" style={{ display: "none" }} onChange={onFile} />
-        {sl("Impact X", cx, setCx, 0, 512)}
-        {sl("Impact Y", cy, setCy, 0, 512)}
-        {sl("Radius", radius, setRadius, 20, 250)}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginBottom: 12 }}>
-          {chk("Crater", crater, setCrater)}
-          {chk("Burn", burn, setBurn)}
-          {chk("Debris", debris, setDebris)}
-          {chk("Smoke", smoke, setSmoke)}
-          {chk("Lens Distortion", lens, setLens)}
+      <div style={{ display: "grid", gridTemplateColumns: "340px 1fr", gap: 20, alignItems: "start" }}>
+        <div>
+          <Card>
+            <SectionTitle>Image</SectionTitle>
+            <UploadBox preview={preview} onClick={() => fileRef.current?.click()} />
+            <input ref={fileRef} type="file" accept=".png,.jpg,.jpeg" style={{ display: "none" }} onChange={onFile} />
+          </Card>
+          <Card>
+            <SectionTitle>Impact Parameters</SectionTitle>
+            <SliderField label="Center X" value={cx} set={setCx} min={0} max={512} />
+            <SliderField label="Center Y" value={cy} set={setCy} min={0} max={512} />
+            <SliderField label="Radius" value={radius} set={setRadius} min={20} max={250} />
+          </Card>
+          <Card>
+            <SectionTitle>Effects</SectionTitle>
+            <CheckField label="Crater deformation" value={crater} set={setCrater} />
+            <CheckField label="Burn / charring" value={burn} set={setBurn} />
+            <CheckField label="Debris scatter" value={debris} set={setDebris} />
+            <CheckField label="Smoke overlay" value={smoke} set={setSmoke} />
+            <CheckField label="Lens distortion (shockwave)" value={lens} set={setLens} />
+            <div style={{ marginTop: 16 }}>
+              <Btn onClick={run} loading={loading} disabled={!image}>Generate Impact</Btn>
+            </div>
+            {error && <ErrorMsg msg={error} />}
+          </Card>
         </div>
-        <Btn onClick={run} loading={loading} disabled={!image}>Simulate Impact</Btn>
-        {error && <p style={s.error}>{error}</p>}
+
+        <div>
+          {result ? (
+            <Card>
+              <SectionTitle>Result</SectionTitle>
+              <TwoCol>
+                <ResultImage src={preview!} label="Original" />
+                <ResultImage src={toB64Img(result)} label="After Impact" />
+              </TwoCol>
+              <div style={{ marginTop: 16 }}>
+                <a href={toB64Img(result)} download="simulation.png" style={{ display: "block", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 9, padding: "11px 24px", textAlign: "center", fontSize: 14, fontWeight: 600, color: "#94a3b8" }}>
+                  Download Result
+                </a>
+              </div>
+            </Card>
+          ) : (
+            <Card style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 320, border: "1.5px dashed rgba(255,255,255,0.06)" }}>
+              <p style={{ color: "#1e293b", fontSize: 14 }}>Result will appear here</p>
+            </Card>
+          )}
+        </div>
       </div>
-
-      {result && (
-        <div style={s.card}>
-          <h2 style={s.h2}>Simulation Result</h2>
-          <div style={s.row2}>
-            <div><h3 style={s.h3}>Original</h3><img src={preview!} alt="original" style={s.resultImg} /></div>
-            <div><h3 style={s.h3}>After Impact</h3><img src={toB64Img(result)} alt="result" style={s.resultImg} /></div>
-          </div>
-          <a href={toB64Img(result)} download="simulation.png" style={{ ...s.btn, display: "block", textAlign: "center", marginTop: 16, textDecoration: "none" }}>
-            Download Result
-          </a>
-        </div>
-      )}
     </div>
   )
 }

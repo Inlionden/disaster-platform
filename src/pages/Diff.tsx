@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react"
-import { s, API_URL, toB64Img, UploadBox, Btn, Stat } from "../lib/ui"
+import { API_URL, toB64Img, PageHeader, Card, SectionTitle, Stat, StatsGrid, UploadBox, Btn, ErrorMsg, TwoCol, ResultImage } from "../lib/ui"
 
 export default function Diff() {
   const [before, setBefore] = useState<File | null>(null)
@@ -29,52 +29,67 @@ export default function Diff() {
       form.append("before", before)
       form.append("after", after)
       const res = await fetch(`${API_URL}/diff`, { method: "POST", body: form })
-      if (!res.ok) throw new Error(`Error ${res.status}`)
+      if (!res.ok) throw new Error(`Server error ${res.status}`)
       setResult(await res.json())
     } catch (e: any) { setError(e.message) }
     finally { setLoading(false) }
   }
 
-  const dmgColor = result ? (result.damage_score > 0.5 ? "#f87171" : result.damage_score > 0.2 ? "#fbbf24" : "#34d399") : "#38bdf8"
+  const dmg = result?.damage_score ?? 0
+  const dmgColor = dmg > 0.5 ? "#f87171" : dmg > 0.2 ? "#fbbf24" : "#34d399"
+  const severity = dmg > 0.5 ? "HIGH" : dmg > 0.2 ? "MEDIUM" : "LOW"
 
   return (
     <div>
-      <h1 style={s.h1}>Before / After Analysis</h1>
-      <p style={s.sub}>Upload two images of the same area to detect damage and structural changes.</p>
+      <PageHeader title="Before / After Analysis" desc="Upload two images of the same area to detect structural damage and changes over time." />
 
-      <div style={s.card}>
-        <div style={s.row2}>
+      <Card>
+        <SectionTitle>Upload Images</SectionTitle>
+        <TwoCol>
           <div>
-            <label style={s.label}>Before Image</label>
+            <div style={{ fontSize: 12, color: "#475569", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.06em" }}>Before</div>
             <UploadBox preview={previewB} onClick={() => refB.current?.click()} label="Upload BEFORE image" />
             <input ref={refB} type="file" accept=".png,.jpg,.jpeg,.tif,.tiff" style={{ display: "none" }} onChange={onBefore} />
           </div>
           <div>
-            <label style={s.label}>After Image</label>
+            <div style={{ fontSize: 12, color: "#475569", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.06em" }}>After</div>
             <UploadBox preview={previewA} onClick={() => refA.current?.click()} label="Upload AFTER image" />
             <input ref={refA} type="file" accept=".png,.jpg,.jpeg,.tif,.tiff" style={{ display: "none" }} onChange={onAfter} />
           </div>
-        </div>
+        </TwoCol>
         <Btn onClick={run} loading={loading} disabled={!before || !after}>Analyse Damage</Btn>
-        {error && <p style={s.error}>{error}</p>}
-      </div>
+        {error && <ErrorMsg msg={error} />}
+      </Card>
 
       {result && (
-        <div style={s.card}>
-          <h2 style={s.h2}>Damage Report</h2>
-          <div style={{ ...s.statCard, marginBottom: 20, border: `2px solid ${dmgColor}` }}>
-            <div style={{ fontSize: 36, fontWeight: 800, color: dmgColor }}>{(result.damage_score * 100).toFixed(1)}%</div>
-            <div style={{ color: "#94a3b8", fontSize: 13 }}>Overall Damage Score</div>
-          </div>
-          <div style={s.statsRow}>
-            <Stat label="Destroyed Pixels" value={result.destroyed_pixels?.toLocaleString()} />
-            <Stat label="New Pixels" value={result.new_pixels?.toLocaleString()} />
-            <Stat label="Severity" value={result.damage_score > 0.5 ? "HIGH" : result.damage_score > 0.2 ? "MEDIUM" : "LOW"} />
-            <Stat label="Status" value={result.damage_score > 0.5 ? "Critical" : result.damage_score > 0.2 ? "Moderate" : "Minimal"} />
-          </div>
-          <h3 style={s.h3}>Destroyed Buildings Mask</h3>
-          <img src={toB64Img(result.destroyed_mask_base64)} alt="destroyed" style={s.resultImg} />
-        </div>
+        <>
+          <Card>
+            <SectionTitle>Damage Report</SectionTitle>
+            <div style={{ display: "flex", alignItems: "center", gap: 20, background: "#060910", borderRadius: 10, padding: 20, marginBottom: 20, border: `1px solid ${dmgColor}30` }}>
+              <div style={{ textAlign: "center", minWidth: 100 }}>
+                <div style={{ fontSize: 42, fontWeight: 800, color: dmgColor, letterSpacing: "-1px" }}>{(dmg * 100).toFixed(0)}%</div>
+                <div style={{ fontSize: 11, color: "#475569", textTransform: "uppercase", letterSpacing: "0.1em" }}>Damage Score</div>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ height: 8, background: "#1e293b", borderRadius: 4, overflow: "hidden", marginBottom: 8 }}>
+                  <div style={{ height: "100%", width: `${dmg * 100}%`, background: dmgColor, borderRadius: 4, transition: "width 1s ease" }} />
+                </div>
+                <div style={{ fontSize: 13, color: dmgColor, fontWeight: 600 }}>Severity: {severity}</div>
+              </div>
+            </div>
+            <StatsGrid>
+              <Stat label="Destroyed Pixels" value={result.destroyed_pixels?.toLocaleString()} accent="#f87171" />
+              <Stat label="New Pixels" value={result.new_pixels?.toLocaleString()} accent="#34d399" />
+              <Stat label="Damage Score" value={(dmg * 100).toFixed(1) + "%"} accent={dmgColor} />
+              <Stat label="Severity" value={severity} accent={dmgColor} />
+            </StatsGrid>
+          </Card>
+
+          <Card>
+            <SectionTitle>Change Detection</SectionTitle>
+            <ResultImage src={toB64Img(result.destroyed_mask_base64)} label="Destroyed Buildings Mask (white = lost structures)" />
+          </Card>
+        </>
       )}
     </div>
   )

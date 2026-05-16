@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react"
-import { s, API_URL, toB64Img, Stat, UploadBox, Btn } from "../lib/ui"
+import { API_URL, toB64Img, PageHeader, Card, SectionTitle, Stat, StatsGrid, UploadBox, Btn, SliderField, ErrorMsg, ResultImage } from "../lib/ui"
 
 export default function Analyze() {
   const [image, setImage] = useState<File | null>(null)
@@ -23,7 +23,7 @@ export default function Analyze() {
       form.append("file", image)
       form.append("threshold", String(threshold))
       const res = await fetch(`${API_URL}/analyze`, { method: "POST", body: form })
-      if (!res.ok) throw new Error(`Error ${res.status}`)
+      if (!res.ok) throw new Error(`Server error ${res.status}`)
       setResult(await res.json())
     } catch (e: any) { setError(e.message) }
     finally { setLoading(false) }
@@ -31,30 +31,36 @@ export default function Analyze() {
 
   return (
     <div>
-      <h1 style={s.h1}>Building Segmentation</h1>
-      <p style={s.sub}>Upload an aerial image to detect and segment buildings.</p>
+      <PageHeader title="Building Segmentation" desc="Upload an aerial image to detect and segment buildings using DABLCNet — ViT@512 with edge-guided decoder." />
 
-      <div style={s.card}>
+      <Card>
+        <SectionTitle>Input Image</SectionTitle>
         <UploadBox preview={preview} onClick={() => fileRef.current?.click()} />
         <input ref={fileRef} type="file" accept=".png,.jpg,.jpeg,.tif,.tiff" style={{ display: "none" }} onChange={onFile} />
-        <label style={s.label}>Threshold: {threshold}</label>
-        <input type="range" min={0.1} max={0.9} step={0.05} value={threshold} onChange={e => setThreshold(+e.target.value)} style={{ width: "100%", marginBottom: 12 }} />
+        <SliderField label="Detection Threshold" value={threshold} set={setThreshold} min={0.1} max={0.9} step={0.05} />
         <Btn onClick={run} loading={loading} disabled={!image}>Run Segmentation</Btn>
-        {error && <p style={s.error}>{error}</p>}
-      </div>
+        {error && <ErrorMsg msg={error} />}
+      </Card>
 
       {result && (
-        <div style={s.card}>
-          <h2 style={s.h2}>Results</h2>
-          <div style={s.statsRow}>
-            <Stat label="Building Pixels" value={result.building_pixels?.toLocaleString()} />
-            <Stat label="Coverage" value={`${result.coverage_pct}%`} />
-            <Stat label="EDL Uncertainty" value={result.edl_uncertainty_mean?.toFixed(4)} />
-            <Stat label="CLAAM Agreement" value={result.claam_agreement_mean?.toFixed(4)} />
-          </div>
-          <h3 style={s.h3}>Segmentation Mask</h3>
-          <img src={toB64Img(result.mask_png_base64)} alt="mask" style={s.resultImg} />
-        </div>
+        <>
+          <Card>
+            <SectionTitle>Detection Stats</SectionTitle>
+            <StatsGrid>
+              <Stat label="Building Pixels" value={result.building_pixels?.toLocaleString()} />
+              <Stat label="Coverage" value={`${result.coverage_pct}%`} />
+              <Stat label="EDL Uncertainty" value={result.edl_uncertainty_mean?.toFixed(4)} accent="#fb923c" />
+              <Stat label="CLAAM Agreement" value={result.claam_agreement_mean?.toFixed(4)} accent="#34d399" />
+            </StatsGrid>
+          </Card>
+          <Card>
+            <SectionTitle>Segmentation Output</SectionTitle>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              <ResultImage src={preview!} label="Original" />
+              <ResultImage src={toB64Img(result.mask_png_base64)} label="Building Mask" />
+            </div>
+          </Card>
+        </>
       )}
     </div>
   )

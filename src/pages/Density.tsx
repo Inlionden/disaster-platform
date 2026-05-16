@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react"
-import { s, API_URL, toB64Img, UploadBox, Btn, Stat } from "../lib/ui"
+import { API_URL, toB64Img, PageHeader, Card, SectionTitle, Stat, StatsGrid, UploadBox, Btn, ErrorMsg, TwoCol, ResultImage } from "../lib/ui"
 
 export default function Density() {
   const [image, setImage] = useState<File | null>(null)
@@ -21,7 +21,7 @@ export default function Density() {
       const form = new FormData()
       form.append("file", image)
       const res = await fetch(`${API_URL}/density`, { method: "POST", body: form })
-      if (!res.ok) throw new Error(`Error ${res.status}`)
+      if (!res.ok) throw new Error(`Server error ${res.status}`)
       setResult(await res.json())
     } catch (e: any) { setError(e.message) }
     finally { setLoading(false) }
@@ -29,47 +29,58 @@ export default function Density() {
 
   const matrix: number[][] = result?.density_matrix ?? []
   const maxD = result?.max_density ?? 1
+  const n = result?.n_cells ?? 16
 
   return (
     <div>
-      <h1 style={s.h1}>Population Density Map</h1>
-      <p style={s.sub}>Analyse building density across zones using KDE over detected building centroids.</p>
+      <PageHeader title="Population Density Map" desc="Computes building density per zone using KDE over detected building centroids. High density zones indicate dense urban areas." />
 
-      <div style={s.card}>
+      <Card>
+        <SectionTitle>Input Image</SectionTitle>
         <UploadBox preview={preview} onClick={() => fileRef.current?.click()} />
         <input ref={fileRef} type="file" accept=".png,.jpg,.jpeg,.tif,.tiff" style={{ display: "none" }} onChange={onFile} />
         <Btn onClick={run} loading={loading} disabled={!image}>Compute Density</Btn>
-        {error && <p style={s.error}>{error}</p>}
-      </div>
+        {error && <ErrorMsg msg={error} />}
+      </Card>
 
       {result && (
-        <div style={s.card}>
-          <h2 style={s.h2}>Results</h2>
-          <div style={s.statsRow}>
-            <Stat label="Buildings Detected" value={String(result.building_count)} />
-            <Stat label="Max Density" value={(result.max_density * 100).toFixed(1) + "%"} />
-            <Stat label="Mean Density" value={(result.mean_density * 100).toFixed(1) + "%"} />
-            <Stat label="Grid Size" value={`${result.n_cells}×${result.n_cells}`} />
-          </div>
+        <>
+          <Card>
+            <SectionTitle>Zone Statistics</SectionTitle>
+            <StatsGrid>
+              <Stat label="Buildings Detected" value={String(result.building_count)} />
+              <Stat label="Max Density" value={(result.max_density * 100).toFixed(1) + "%"} accent="#f87171" />
+              <Stat label="Mean Density" value={(result.mean_density * 100).toFixed(1) + "%"} accent="#fbbf24" />
+              <Stat label="Grid Size" value={`${n}×${n}`} accent="#a78bfa" />
+            </StatsGrid>
+          </Card>
 
-          <div style={s.row2}>
-            <div>
-              <h3 style={s.h3}>KDE Heatmap</h3>
-              <img src={toB64Img(result.kde_heatmap_base64)} alt="kde" style={s.resultImg} />
-            </div>
-            <div>
-              <h3 style={s.h3}>Grid Density</h3>
-              <div style={{ display: "grid", gridTemplateColumns: `repeat(${result.n_cells}, 1fr)`, gap: 1, background: "#0f172a", borderRadius: 6, overflow: "hidden" }}>
-                {matrix.flat().map((v, i) => {
-                  const intensity = maxD > 0 ? v / maxD : 0
-                  const r = Math.round(intensity * 220)
-                  const g = Math.round((1 - intensity) * 100)
-                  return <div key={i} style={{ aspectRatio: "1", background: `rgb(${r},${g},30)`, opacity: 0.85 }} title={`${(v * 100).toFixed(1)}%`} />
-                })}
+          <Card>
+            <SectionTitle>Heatmap & Grid</SectionTitle>
+            <TwoCol>
+              <ResultImage src={toB64Img(result.kde_heatmap_base64)} label="KDE Density Heatmap" />
+              <div>
+                <div style={{ fontSize: 12, color: "#475569", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.06em" }}>Grid Density</div>
+                <div style={{ display: "grid", gridTemplateColumns: `repeat(${n}, 1fr)`, gap: 1.5, borderRadius: 8, overflow: "hidden", border: "1px solid rgba(255,255,255,0.06)" }}>
+                  {matrix.flat().map((v, i) => {
+                    const t = maxD > 0 ? v / maxD : 0
+                    const r = Math.round(t * 239)
+                    const g = Math.round(68 + (1 - t) * 60)
+                    const b = Math.round(68 - t * 40)
+                    return (
+                      <div key={i} title={`${(v * 100).toFixed(1)}%`} style={{ aspectRatio: "1", background: `rgb(${r},${g},${b})`, opacity: 0.15 + t * 0.85 }} />
+                    )
+                  })}
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
+                  <span style={{ fontSize: 11, color: "#1e293b" }}>Low</span>
+                  <div style={{ flex: 1, height: 4, margin: "6px 8px 0", borderRadius: 2, background: "linear-gradient(to right, #444,#ef4444)" }} />
+                  <span style={{ fontSize: 11, color: "#f87171" }}>High</span>
+                </div>
               </div>
-            </div>
-          </div>
-        </div>
+            </TwoCol>
+          </Card>
+        </>
       )}
     </div>
   )
